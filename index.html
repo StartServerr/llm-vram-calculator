@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#10151d">
+  <meta name="description" content="Бесплатный калькулятор VRAM для LLM: оценка памяти под веса, KV-cache, контекст и параллельные запросы. От Start Server.">
+  <title>LLM VRAM Calculator — Start Server</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="style.css">
+  <script src="config.js" defer></script>
+  <script src="calculator.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <main class="site-shell">
+    <header class="header">
+      <a class="brand" href="https://start-server.ru/" target="_blank" rel="noopener noreferrer" aria-label="Start Server — сайт">
+        <span class="brand-icon" aria-hidden="true">S<span>/</span>S</span>
+        <span class="brand-copy"><strong>Start Server</strong><small>AI infrastructure tools</small></span>
+      </a>
+      <span class="header-tag">FREE TOOL · v1.0</span>
+    </header>
+
+    <section class="intro" aria-labelledby="page-title">
+      <div class="eyebrow"><span class="status-dot" aria-hidden="true"></span> Инженерный калькулятор</div>
+      <h1 id="page-title">Сколько VRAM нужно<br>для <em>вашей LLM?</em></h1>
+      <p>Оцените память под веса модели, KV-cache и резерв под инференс. Настройте контекст, квантизацию и число одновременных запросов.</p>
+    </section>
+
+    <div class="layout">
+      <section class="panel controls" aria-labelledby="settings-title">
+        <div class="panel-heading"><span class="panel-index">01</span><h2 id="settings-title">Параметры расчёта</h2></div>
+        <form id="calculator-form" novalidate>
+          <label class="input-group full" for="preset"><span>Модель</span>
+            <select id="preset" name="preset">
+              <option value="qwen32">Qwen2.5-32B-Instruct</option>
+              <option value="llama70">Llama 3.3 70B Instruct</option>
+              <option value="custom">Своя конфигурация</option>
+            </select>
+          </label>
+          <fieldset class="fieldset">
+            <legend>Архитектура модели</legend>
+            <div class="input-grid">
+              <label class="input-group"><span>Параметры, млрд</span><input type="number" id="parametersBillions" min="0.01" max="10000" step="any" required></label>
+              <label class="input-group"><span>Число слоёв</span><input type="number" id="layers" min="1" max="10000" step="1" required></label>
+              <label class="input-group"><span>KV-heads</span><input type="number" id="kvHeads" min="1" max="100000" step="1" required></label>
+              <label class="input-group"><span>Head dimension</span><input type="number" id="headDim" min="1" max="100000" step="1" required></label>
+            </div>
+            <p class="field-hint">Для своих моделей возьмите num_hidden_layers, num_key_value_heads и head_dim из config.json.</p>
+          </fieldset>
+          <fieldset class="fieldset">
+            <legend>Нагрузка и точность</legend>
+            <div class="input-grid">
+              <label class="input-group"><span>Формат весов</span>
+                <select id="precision">
+                  <option value="16">BF16 / FP16 · 16 bpw</option>
+                  <option value="8.2">INT8 · ~8.2 bpw</option>
+                  <option value="4.8" selected>Q4 · ~4.8 bpw</option>
+                  <option value="custom">Свои биты на вес</option>
+                </select>
+              </label>
+              <label class="input-group"><span>Бит на вес (BPW)</span><input type="number" id="bitsPerWeight" min="0.01" max="32" step="0.1" value="4.8" required></label>
+              <label class="input-group"><span>Контекст / запрос, токенов</span><input type="number" id="contextTokens" min="1" max="10000000" step="1" value="8192" required></label>
+              <label class="input-group"><span>Одновременных запросов</span><input type="number" id="parallelRequests" min="1" max="100000" step="1" value="1" required></label>
+              <label class="input-group"><span>Формат KV-cache</span>
+                <select id="kvBytes"><option value="2" selected>BF16 / FP16 (2 байта)</option><option value="1">FP8 (1 байт)</option></select>
+              </label>
+              <label class="input-group"><span>Резерв runtime, GiB</span><input type="number" id="runtimeReserve" min="0" max="10000" step="0.5" value="3" required></label>
+            </div>
+            <p class="field-hint">Контекст — оценка числа одновременно сохранённых токенов <i>на один запрос</i>. Резерв 3 GiB условный — увеличьте при необходимости.</p>
+          </fieldset>
+          <fieldset class="fieldset last-fieldset">
+            <legend>Ваша GPU-конфигурация</legend>
+            <div class="input-grid">
+              <label class="input-group"><span>VRAM одной GPU, GiB</span>
+                <select id="gpuVram">
+                  <option value="24">24</option><option value="48" selected>48</option><option value="80">80</option><option value="96">96</option><option value="141">141</option><option value="180">180</option><option value="192">192</option>
+                </select>
+              </label>
+              <label class="input-group"><span>Количество GPU</span><input type="number" id="gpuCount" min="1" max="128" step="1" value="1" required></label>
+            </div>
+          </fieldset>
+          <p id="input-error" class="input-error" aria-live="polite" hidden></p>
+          <div class="form-actions"><button type="button" id="reset-button" class="button button-secondary">Сбросить</button><button type="button" id="copy-button" class="button button-ghost">Скопировать расчёт ↗</button></div>
+        </form>
+      </section>
+
+      <section class="results" aria-labelledby="results-title">
+        <div class="panel results-main">
+          <div class="panel-heading"><span class="panel-index">02</span><h2 id="results-title">Оценка памяти</h2></div>
+          <p class="results-eyebrow">Общая потребность</p>
+          <div class="main-number"><strong id="total-value">—</strong><span>GiB</span></div>
+          <p class="results-sub">Суммарная оценка VRAM для выбранной нагрузки</p>
+          <div class="breakdown" aria-label="Структура потребления памяти">
+            <div class="breakdown-bar" id="breakdown-bar"><span id="weights-bar"></span><span id="kv-bar"></span><span id="runtime-bar"></span></div>
+            <div class="legend"><div><span class="legend-dot color-weights"></span> Веса <b id="weights-value">—</b></div><div><span class="legend-dot color-kv"></span> KV-cache <b id="kv-value">—</b></div><div><span class="legend-dot color-runtime"></span> Runtime <b id="runtime-value">—</b></div></div>
+          </div>
+          <div id="fit-message" class="fit-message" role="status"><span id="fit-indicator" class="fit-indicator"></span><div><strong id="fit-title">—</strong><p id="fit-description">—</p></div></div>
+        </div>
+        <div class="panel details-panel">
+          <div class="detail-row"><span>Общая VRAM GPU</span><strong id="available-value">—</strong></div>
+          <div class="detail-row"><span>Остаток / дефицит</span><strong id="slack-value">—</strong></div>
+          <div class="detail-row"><span>KV-cache на токен</span><strong id="kv-token-value">—</strong></div>
+          <div class="detail-row"><span>Токенов суммарно</span><strong id="tokens-value">—</strong></div>
+          <p class="notice">Это приблизительная оценка объёма, а не гарантия запуска или производительности. При multi-GPU память не складывается автоматически: важны поддержка распределения модели, балансировка, межсоединения и runtime. Для MoE, MLA, sliding-window и CPU offload модель может быть неприменима.</p>
+        </div>
+        <aside class="channel-panel">
+          <div class="channel-kicker">ЗА КУЛИСАМИ AI-ИНФРАСТРУКТУРЫ</div>
+          <h3>Меньше маркетинга.<br>Больше инженерии.</h3>
+          <p>Разбираем GPU-серверы, LLM, архитектуры кластеров, сети и реальные конфигурации.</p>
+          <a id="telegram-link" class="button button-primary" href="#" target="_blank" rel="noopener noreferrer" hidden>Читать Start Server в Telegram <span aria-hidden="true">↗</span></a>
+          <p id="telegram-note" class="config-note">Ссылка на Telegram добавляется владельцем репозитория в config.js</p>
+          <a id="website-link" class="website-link" href="https://start-server.ru/" target="_blank" rel="noopener noreferrer">О компании Start Server ↗</a>
+        </aside>
+      </section>
+    </div>
+    <section class="method" aria-labelledby="method-title">
+      <div class="method-heading"><span class="panel-index">03</span><h2 id="method-title">Как считаем</h2></div>
+      <div class="method-grid">
+        <div><h3>Веса модели</h3><code>params × 10⁹ × BPW / 8 / 2³⁰</code><p>В GiB. Для 4-bit используйте <i>эффективный</i> BPW из формата файла, а не ровно 4.</p></div>
+        <div><h3>KV-cache</h3><code>2 × L × Hkv × D × T × N × B / 2³⁰</code><p>L — слои, Hkv — KV-heads, D — head dimension, T — токены на запрос, N — запросы, B — байты на элемент. Предполагается стандартный плотный KV-cache.</p></div>
+      </div>
+      <p class="sources">Данные по архитектуре: <a href="https://huggingface.co/Qwen/Qwen2.5-32B-Instruct/blob/main/config.json" target="_blank" rel="noopener noreferrer">Qwen2.5 32B</a> · <a href="https://huggingface.co/meta-llama/Llama-3.3-70B-Instruct/blob/main/config.json" target="_blank" rel="noopener noreferrer">Llama 3.3 70B</a> · <a href="https://docs.vllm.ai/en/latest/api/vllm/v1/kv_cache_interface/" target="_blank" rel="noopener noreferrer">vLLM KV-cache</a></p>
+    </section>
+    <footer><span>Start Server · AI infrastructure</span><span>Открытый инструмент · предварительные оценки</span></footer>
+  </main>
+</body>
+</html>
